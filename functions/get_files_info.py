@@ -5,7 +5,11 @@ def get_files_info(working_directory, directory=None):
         # resolve absolute paths
         working_directory = os.path.abspath(working_directory)
         if directory is not None:
-            directory = os.path.abspath(directory)
+            # If directory is an absolute path, use as is; else, join with working_directory
+            if os.path.isabs(directory):
+                directory = os.path.abspath(directory)
+            else:
+                directory = os.path.abspath(os.path.join(working_directory, directory))
         else:
             directory = working_directory
 

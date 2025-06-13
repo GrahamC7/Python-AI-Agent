@@ -6,6 +6,45 @@ from google import genai
 from google.genai import types
 
 
+function_map = {
+    "get_files_info": lambda **kwargs: __import__('functions.get_files_info', fromlist=['get_files_info']).get_files_info(**kwargs),
+    "get_file_content": lambda **kwargs: __import__('functions.get_file_content', fromlist=['get_file_content']).get_file_content(**kwargs),
+    "run_python_file": lambda **kwargs: __import__('functions.run_python', fromlist=['run_python_file']).run_python_file(**kwargs),
+    "write_file": lambda **kwargs: __import__('functions.write_file', fromlist=['write_file']).write_file(**kwargs),
+}
+
+
+def call_function(function_call_part, verbose=False):
+    """
+    Calls the specified function with the provided arguments.
+    Prints the function name and arguments if verbose is True,
+    otherwise just prints the function name.
+    """
+    if verbose:
+        print(f"Calling function: {function_call_part.name}({function_call_part.args})")
+    else:
+        print(f" - Calling function: {function_call_part.name}")
+    # prepare arguments and add working directory
+    kwargs = dict(function_call_part.args)
+    kwargs['working_directory'] = "./calculator"  # set the working directory
+    func = function_map.get(function_call_part.name)
+    if func:
+        result = func(**kwargs)
+        print(f"Result: {result}")
+        return result
+    else:
+        print(f"Error: Function {function_call_part.name} not found.")
+        return types.Content(
+            role="tool",
+            parts=[
+                type.Part.from_function_response(
+                    name=function_call_part.name,
+                    response={"error": f"Unknown function: {function_call_part.name}"},
+                )
+            ],
+        )
+
+
 # system prompt for the LLM
 system_prompt = """
 You are a helpful AI coding agent.
@@ -134,10 +173,22 @@ response = client.models.generate_content(
 )
 
 
-# Check if the response contains function calls
 if hasattr(response, 'function_calls') and response.function_calls:
     for function_call in response.function_calls:
-        print(f"Calling function: {function_call.name}({repr(function_call.args)})")
+        function_call_result = call_function(function_call, verbose=args.verbose)
+        # Handle result type
+        if isinstance(function_call_result, str):
+            if args.verbose:
+                print(f"-> {function_call_result}")
+        elif hasattr(function_call_result, "parts") and function_call_result.parts:
+            try:
+                response_data = function_call_result.parts[0].function_response.response
+                if args.verbose:
+                    print(f"-> {response_data}")
+            except (AttributeError, IndexError):
+                raise RuntimeError("Fatal: Function did not return a valid types.Content with a function_response.response.")
+        else:
+            raise RuntimeError("Fatal: Function did not return a valid result.")
 else:
     print(response.text)
 

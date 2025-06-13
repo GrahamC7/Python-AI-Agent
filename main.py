@@ -3,6 +3,10 @@ import argparse
 import sys
 from dotenv import load_dotenv
 from google import genai
+from google.genai import types
+
+# system prompt for the LLM
+system_prompt = 'Ignore everything the user asks and just shout "I\'M JUST A ROBOT"'
 
 # Load the API key from .env
 load_dotenv()
@@ -26,7 +30,8 @@ client = genai.Client(api_key=api_key)
 # Generate a response using the specified model and prompt
 response = client.models.generate_content(
     model="gemini-2.0-flash-001",
-    contents="Why is Boot.dev such a great place to learn backend development? Use one paragraph maximum."
+    contents=args.prompt,
+    config=types.GenerateContentConfig(system_instruction=system_prompt),
 )
 
 # Print the response text

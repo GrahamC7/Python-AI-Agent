@@ -83,4 +83,4 @@ MIT License
 
 ---
 
-**Note:** This project is for educational and experimental purposes. Use with caution on important files or
+**Note:** This project is for educational and experimental purposes. Use with caution on important files or codebases.

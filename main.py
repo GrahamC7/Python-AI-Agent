@@ -37,7 +37,7 @@ def call_function(function_call_part, verbose=False):
         return types.Content(
             role="tool",
             parts=[
-                type.Part.from_function_response(
+                types.Part.from_function_response(
                     name=function_call_part.name,
                     response={"error": f"Unknown function: {function_call_part.name}"},
                 )
@@ -161,7 +161,7 @@ if not args.prompt:
 # Create a Gemini client
 client = genai.Client(api_key=api_key)
 
-
+'''
 # Generate a response using the specified model and prompt
 response = client.models.generate_content(
     model="gemini-2.0-flash-001",
@@ -191,10 +191,61 @@ if hasattr(response, 'function_calls') and response.function_calls:
             raise RuntimeError("Fatal: Function did not return a valid result.")
 else:
     print(response.text)
+'''
 
 
-# Print token usage details
-if args.verbose:
-    print(f"User prompt: {args.prompt}")
-    print(f"Prompt tokens: {response.usage_metadata.prompt_token_count}")
-    print(f"Response tokens: {response.usage_metadata.candidates_token_count}")
+# initialize the conversation with the user's prompt
+messages = [args.prompt]
+
+# agent loop: iterate at most 20 times
+for _ in range(20):
+    # generate a response using the specified model and prompt
+    response = client.models.generate_content(
+        model="gemini-2.0-flash-001",
+        contents=messages,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            tools=[available_functions],
+        ),
+    )
+
+    function_called = False  # flag to check if a function was called
+
+    # add each candidate response to the conversation
+    if hasattr(response, 'candidates') and response.candidates is not None:
+        for candidate in response.candidates:
+            if hasattr(candidate, "content"):
+                messages.append(candidate.content)
+                function_called = False  # flag to check if a function was called
+
+    # Print token usage details
+    if args.verbose:
+        print(f"User prompt: {args.prompt}")
+        if hasattr(response, "usage_metadata") and response.usage_metadata is not None:
+            print(f"Prompt tokens: {getattr(response.usage_metadata, 'prompt_token_count', 'N/A')}")
+            print(f"Response tokens: {getattr(response.usage_metadata, 'candidates_token_count', 'N/A')}")
+        else:
+            print("Token usage details not available.")
+
+    # add each candidate response to the conversation
+    if hasattr(response, 'candidates') and response.candidates is not None:
+        for candidate in response.candidates:
+            if hasattr(candidate, "content"):
+                messages.append(candidate.content)
+
+    # handle function calls if they exist
+    if hasattr(response, 'function_calls') and response.function_calls:
+        for function_call in response.function_calls:
+            function_called = True  # set the flag to True
+            function_call_result = call_function(function_call, verbose=args.verbose)
+            # Handle result type
+            if isinstance(function_call_result, str):
+                messages.append(function_call_result)
+            elif hasattr(function_call_result, "parts") and function_call_result.parts:
+                messages.append(function_call_result)
+            function_called = True  # set the flag to True
+
+    # if no function was called, break the loop
+    if not function_called:
+        print(response.text)
+        break
